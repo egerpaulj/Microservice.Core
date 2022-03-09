@@ -8,6 +8,20 @@
 - Https
 - Request duration logging
 
+**Note:** Contains git submodule 
+
+```
+git clone --recurse-submodules https://github.com/egerpaulj/Microservice.Amqp.git
+```
+
+OR
+
+```
+git clone https://github.com/egerpaulj/Microservice.Amqp.git
+git submodule init
+git submodule update
+```
+
 ## Abstract
 
 Whilst implementing Microservice designs; several common design/implementation decisions should be provided as re-usable libraries.
