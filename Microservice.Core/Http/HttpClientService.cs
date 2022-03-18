@@ -1,16 +1,16 @@
 //      Microservice Core Libraries for .Net C#                                                                                                                                       
 //      Copyright (C) 2021  Paul Eger                                                                                                                                                                     
-                                                                                                                                                                                                                   
+
 //      This program is free software: you can redistribute it and/or modify                                                                                                                                          
 //      it under the terms of the GNU General Public License as published by                                                                                                                                          
 //      the Free Software Foundation, either version 3 of the License, or                                                                                                                                             
 //      (at your option) any later version.                                                                                                                                                                           
-                                                                                                                                                                                                                   
+
 //      This program is distributed in the hope that it will be useful,                                                                                                                                               
 //      but WITHOUT ANY WARRANTY; without even the implied warranty of                                                                                                                                                
 //      MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the                                                                                                                                                 
 //      GNU General Public License for more details.                                                                                                                                                                  
-                                                                                                                                                                                                                   
+
 //      You should have received a copy of the GNU General Public License                                                                                                                                             
 //      along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
@@ -36,18 +36,13 @@ namespace Microservice.Core.Http
         private const string HttpContentType = "application/json";
         private readonly HttpClient _httpClient;
         private readonly ILogger<HttpClientService> _logger;
-        private readonly JsonConverter[] _jsonConverters;
+        private readonly IJsonConverterProvider _converterProvider;
 
-        public HttpClientService(HttpClient httpClient, ILogger<HttpClientService> httpClientService, IJsonConverterProvider converterProvider) 
-        : this (httpClient, httpClientService, converterProvider.GetJsonConverters())
+        public HttpClientService(HttpClient httpClient, ILogger<HttpClientService> httpClientService, IJsonConverterProvider converterProvider)
         {
-            
-        }
-        public HttpClientService(HttpClient httpClient, ILogger<HttpClientService> httpClientService, params JsonConverter[] converters)
-        {
+            _converterProvider = converterProvider;
             _logger = httpClientService;
             _httpClient = httpClient;
-            _jsonConverters = converters;
         }
 
         public TryOptionAsync<T> Get<T>(Option<Guid> correlationId, Option<string> uri)
@@ -82,7 +77,7 @@ namespace Microservice.Core.Http
 
                 send.Match(s =>
                 {
-                    var content = typeof(R).IsValueType ? s.ToString() : JsonConvert.SerializeObject(s);
+                    var content = typeof(R).IsValueType ? s.ToString() : _converterProvider.Serialize(s);
                     httpRequestMessage.Content = new StringContent(content, Encoding.UTF8, HttpContentType);
                 }, () => { });
 
@@ -99,7 +94,7 @@ namespace Microservice.Core.Http
 
                 send.Match(s =>
                 {
-                    var content = typeof(R).IsValueType ? s.ToString() : JsonConvert.SerializeObject(s);
+                    var content = typeof(R).IsValueType ? s.ToString() : _converterProvider.Serialize(s);
                     httpRequestMessage.Content = new StringContent(content, Encoding.UTF8, HttpContentType);
                 }, () => { });
 
@@ -132,13 +127,13 @@ namespace Microservice.Core.Http
 
             var contentString = await response.Content.ReadAsStringAsync();
 
-            if(typeof(T).IsValueType)
+            if (typeof(T).IsValueType)
             {
                 var converter = TypeDescriptor.GetConverter(typeof(T));
-                return (T) converter.ConvertFromString(contentString);
+                return (T)converter.ConvertFromString(contentString);
             }
 
-            var content = JsonConvert.DeserializeObject<T>(contentString, _jsonConverters);
+            var content = _converterProvider.Deserialize<T>(contentString);
 
             return (T)content;
         }
@@ -171,7 +166,7 @@ namespace Microservice.Core.Http
                         _logger.LogWarning($"Timeout or cancellation exception. Retrying request: {request.RequestUri}");
                     });
 
-            var response = await retryPolicy.ExecuteAsync<HttpResponseMessage>( () => _httpClient.SendAsync(request));
+            var response = await retryPolicy.ExecuteAsync<HttpResponseMessage>(() => _httpClient.SendAsync(request));
 
             if (response.StatusCode != System.Net.HttpStatusCode.OK)
                 throw new HttpRequestException("Http request not successful", null, response.StatusCode);
